@@ -128,7 +128,7 @@ function setBusy(b, msg) {
 
 /* ---------------- settings ---------------- */
 async function loadModels() {
-  const key = $("apiKey").value.trim();
+  const key = cleanKey($("apiKey").value); $("apiKey").value = key;
   const st = $("settingsStatus");
   if (!key) { st.className = "status err"; st.textContent = "Enter your API key first."; return; }
   st.className = "status"; st.innerHTML = '<span class="spinner"></span>Loading models…';
@@ -141,8 +141,13 @@ async function loadModels() {
   } catch (e) { st.className = "status err"; st.textContent = e.message; }
 }
 async function fetchModels(key) {
-  const r = await fetch(MODELS_URL, { headers: apiHeaders(key) });
-  if (!r.ok) throw new Error(r.status === 401 ? "API key rejected (401). Check it in console.anthropic.com." : `Could not load models (${r.status}).`);
+  const h = apiHeaders(key); delete h["content-type"];
+  const r = await fetch(MODELS_URL, { headers: h });
+  if (!r.ok) {
+    let detail = ""; try { const j = await r.json(); detail = (j.error && j.error.message) || JSON.stringify(j); } catch { /* ignore */ }
+    if (r.status === 401) throw new Error("API key rejected (401). Copy the key again from console.anthropic.com." + (detail ? " — " + detail : ""));
+    throw new Error(`Could not load models (${r.status}): ${detail || "no details"}. You can type a model ID below instead.`);
+  }
   const j = await r.json();
   return j.data || [];
 }
@@ -151,11 +156,13 @@ function pickDefaultModel(list) {
   return s ? s.id : "";
 }
 function saveSettings() {
-  store.set("apiKey", $("apiKey").value.trim());
-  if ($("modelSelect").value) store.set("model", $("modelSelect").value);
+  store.set("apiKey", cleanKey($("apiKey").value));
+  const typed = ($("modelManual").value || "").trim();
+  if (typed) store.set("model", typed); else if ($("modelSelect").value) store.set("model", $("modelSelect").value);
   const st = $("settingsStatus"); st.className = "status ok"; st.textContent = "Saved.";
   refreshKeyNotice();
 }
+function cleanKey(k) { return String(k || "").replace(/[^\x21-\x7E]/g, ""); }   // strips spaces, line breaks, hidden characters
 function apiHeaders(key) {
   return { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01",
     "anthropic-dangerous-direct-browser-access": "true" };
