@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vibe Sheet</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><img src="assets/icon-32.png" alt="" width="20" height="20" /> Vibe Sheet</div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="prompt">Prompt</button>
+      <button class="tab" data-tab="history">History</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+  </header>
+
+  <!-- PROMPT TAB -->
+  <main id="tab-prompt" class="panel">
+    <div id="noKey" class="notice warn hidden">
+      Add your Anthropic API key in <a href="#" data-goto="settings">Settings</a> to start.
+    </div>
+
+    <div class="selbar">
+      <span class="dot"></span>
+      <span>Selected: <b id="selAddr">—</b></span>
+      <span id="selSize" class="muted"></span>
+    </div>
+    <div id="cellPrompt" class="cellprompt hidden"></div>
+
+    <div class="chips">
+      <button class="chip" data-p="Explain what these cells do and fix any errors (#N/A, #REF!, #VALUE!, #DIV/0!).">Fix / explain errors</button>
+      <button class="chip" data-p="Clean this data: trim spaces, fix capitalisation, convert numbers stored as text to numbers, make dates consistent (DD/MM/YYYY).">Clean data</button>
+      <button class="chip" data-p="Remove duplicate rows (first row is headers).">Remove duplicates</button>
+      <button class="chip" data-p="Format this as a nice table with bold headers, borders and autofit columns.">Make it tidy</button>
+      <button class="chip" data-p="Make the best chart for this data and place it to the right.">Chart it</button>
+      <button class="chip" data-p="Create a pivot table summarising this data on a new sheet.">Pivot table</button>
+      <button class="chip" data-p="Add a total row underneath using SUM formulas.">Add totals</button>
+      <button class="chip" data-p="Give each input cell a short name from its label, and rewrite the formulas to use those names.">Name cells</button>
+      <button class="chip" data-p="Turn the image into cells. If it's a formula, write it as an Excel formula using labelled input cells.">Image → cells</button>
+    </div>
+
+    <div id="drop" class="composer">
+      <div id="imgWrap" class="imgwrap hidden">
+        <img id="imgThumb" alt="Attached image" />
+        <button id="imgRemove" class="x" title="Remove image">×</button>
+      </div>
+      <textarea id="prompt" rows="4" placeholder="Select cells, then type anything…&#10;e.g. “make negatives red”, “VLOOKUP price from Sheet2”, “split full name into first and last”"></textarea>
+      <div class="composer-row">
+        <label class="iconbtn" title="Attach image (or paste / drop one)">
+          <input id="imgInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+          📷 Image
+        </label>
+        <label class="check" title="Normally the AI can only change cells inside your selection (and fill empty cells next to it).">
+          <input type="checkbox" id="allowOutside" /> Allow edits outside selection
+        </label>
+        <button id="send" class="primary">Go ⏎</button>
+      </div>
+    </div>
+    <div class="hint muted">Ctrl/⌘ + Enter to send · paste or drop images here</div>
+
+    <div id="status" class="status hidden"></div>
+
+    <section id="result" class="result hidden">
+      <div id="resSummary" class="res-summary"></div>
+      <div id="resMessage" class="res-message hidden"></div>
+      <div id="ops"></div>
+      <div id="resActions" class="res-actions">
+        <button id="accept" class="primary">Accept</button>
+        <button id="reject" class="ghost">Reject</button>
+      </div>
+      <div id="usage" class="muted small"></div>
+    </section>
+
+    <section id="applied" class="applied hidden">
+      <span id="appliedText"></span>
+      <button id="undoLast" class="ghost">Undo</button>
+    </section>
+  </main>
+
+  <!-- HISTORY TAB -->
+  <main id="tab-history" class="panel hidden">
+    <p class="muted">Changes made in this session. Undo works newest-first. Prompts are also saved with the cells in this workbook — select a cell to see which prompt made it.</p>
+    <ul id="historyList" class="history"></ul>
+  </main>
+
+  <!-- SETTINGS TAB -->
+  <main id="tab-settings" class="panel hidden">
+    <label class="field">
+      <span>Anthropic API key</span>
+      <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" />
+    </label>
+    <p class="muted small">Stored only in this browser/Excel on this computer. Get one at console.anthropic.com.</p>
+    <div class="field">
+      <span>Model</span>
+      <div class="row">
+        <select id="modelSelect"><option value="">— load models —</option></select>
+        <button id="loadModels" class="ghost">Load</button>
+      </div>
+    </div>
+    <button id="saveSettings" class="primary">Save</button>
+    <div id="settingsStatus" class="status hidden"></div>
+    <hr />
+    <p class="muted small">Vibe Sheet MVP v1.0 · The AI only proposes changes. Nothing is written until you press Accept.</p>
+  </main>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>
