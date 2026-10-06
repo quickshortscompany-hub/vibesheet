@@ -23,39 +23,29 @@ Every change shows a before/after preview. You can untick individual changes. Pr
 
 ---
 
-## Setup (about 15 minutes, once)
+## Setup (already set for github.com/quickshortscompany-hub)
 
-### 1. Get an AI key
-1. Go to **console.anthropic.com**, sign up, and add a small amount of credit (e.g. $5 USD).
-2. **API Keys → Create key** and copy it (starts with `sk-ant-`).
+### 1. Upload to GitHub (replace everything)
+1. Open your repo **quickshortscompany-hub/vibesheet**.
+2. **Add file → Upload files** → drag in EVERYTHING from this folder: `taskpane.html`, `taskpane.js`, `taskpane.css`, `manifest.xml`, `README.md` and the `assets` folder → **Commit changes**. Same-name files are replaced.
+3. Wait 2 minutes. Open https://quickshortscompany-hub.github.io/vibesheet/taskpane.html — the bottom of **Settings** must say **v1.0.2**.
 
-### 2. Put the add-in online (free, GitHub Pages)
-1. Create a free account at **github.com**.
-2. **New repository** → name it exactly `vibesheet` → Public → Create.
-3. Click **uploading an existing file** and drag in everything from this folder (`taskpane.html`, `taskpane.js`, `taskpane.css`, `manifest.xml`, `README.md`, and the `assets` folder) → **Commit changes**.
-4. Repo **Settings → Pages** → Source: *Deploy from a branch* → Branch: `main`, folder `/ (root)` → Save.
-5. Wait about a minute. Check that `https://YOUR-USERNAME.github.io/vibesheet/taskpane.html` opens.
+### 2. Excel desktop (Windows)
+Excel desktop still needs internet: the panel loads from GitHub and talks to the AI.
+1. Make a folder, e.g. `C:\VibeSheet`, and copy `manifest.xml` into it.
+2. Right-click the folder → **Properties → Sharing → Share…** → add yourself → **Share**. Copy the **network path** shown (like `\\YOUR-PC\VibeSheet`).
+3. Excel → **File → Options → Trust Center → Trust Center Settings → Trusted Add-in Catalogs**.
+4. Paste the network path in **Catalog Url** → **Add catalog** → tick **Show in Menu** → **OK** → **OK**.
+5. Close and reopen Excel.
+6. **Home → Add-ins → More Add-ins** (or **Insert → My Add-ins**) → **SHARED FOLDER** tab → **Vibe Sheet** → **Add**.
+7. Click **Vibe Sheet** on the Home tab.
 
-### 3. Point the manifest at your site
-Open `manifest.xml` in Notepad / TextEdit → **Find & Replace** `YOUR-GITHUB-USERNAME` with your GitHub username (lowercase) → Save.
-(Keep this edited copy on your computer; it's the file you upload in step 4.)
+### 3. Excel on the web (alternative)
+**Home → Add-ins → More Add-ins → My Add-ins → Upload My Add-in** → choose `manifest.xml`. If an older Vibe Sheet is there, remove it first (… → Remove).
 
-### 4. Load it into Excel
-**Excel on the web (easiest, works on any computer):**
-excel.cloud.microsoft → open a workbook → **Home → Add-ins → More Add-ins → My Add-ins → Upload My Add-in** → choose `manifest.xml`.
-
-**Windows desktop:** put `manifest.xml` in a folder, share it (right-click → Properties → Sharing → Share), copy the network path (e.g. `\\YOURPC\addins`).
-Excel → File → Options → Trust Center → Trust Center Settings → Trusted Add-in Catalogs → paste the path → Add → tick *Show in Menu* → OK → restart Excel → **Home → Add-ins → Advanced → Shared Folder** → Vibe Sheet.
-
-**Mac desktop:** copy `manifest.xml` into
-`~/Library/Containers/com.microsoft.Excel/Data/Documents/wef` (create `wef` if missing) → restart Excel → **Home → Add-ins → My Add-ins**.
-
-> If you use a uni / work Microsoft account and uploading is blocked, use a personal Microsoft account on Excel for the web instead.
-
-### 5. First run
-**Home → Vibe Sheet** → **Settings** tab → paste key → **Load** (choose a model; Sonnet is a good default) → **Save**.
-
----
+### 4. First run
+**Settings** → paste your Anthropic key → **Load** → pick a Sonnet model → **Save**.
+If Load shows an error, the red box now shows Anthropic's exact message. You can also type a model ID in the box under the dropdown and press Save.
 
 ## Tips
 - **Ctrl/⌘ + Enter** sends.
