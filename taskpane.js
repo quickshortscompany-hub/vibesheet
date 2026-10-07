@@ -1,10 +1,13 @@
-/* Vibe Sheet — MVP v1.0
+/* Vibe Sheet — v1.1
  * Select cells → describe → preview → accept → undo.
  * AI proposes structured operations; nothing touches the workbook until Accept.
  */
 "use strict";
 
 /* ---------------- constants ---------------- */
+const VERSION = "1.1.0";
+const CONFIG = window.VIBESHEET_CONFIG || {};
+const PROXY = /YOUR-SUBDOMAIN|^\s*$/.test(CONFIG.apiUrl || "") ? "" : String(CONFIG.apiUrl).trim().replace(/\/+$/, "");
 const API_URL = "https://api.anthropic.com/v1/messages";
 const MODELS_URL = "https://api.anthropic.com/v1/models?limit=100";
 const SEL_MAX_ROWS = 80, SEL_MAX_COLS = 26;     // selection cells sent to AI
@@ -24,6 +27,8 @@ const state = {
   history: [],          // [{id, time, prompt, summary, titles, steps, undone, records}]
   chat: [],             // recent [{prompt, summary}]
   busy: false,
+  lastError: "",        // for "Report this problem"
+  lastPrompt: "",
 };
 
 /* ---------------- tiny helpers ---------------- */
@@ -66,6 +71,13 @@ function cleanName(n) {
   if (/^[A-Za-z]{1,3}\d+$/.test(s) || /^[rRcC]$/.test(s) || /^[rR]\d*[cC]\d*$/.test(s)) s += "_";
   return s;
 }
+function deviceId() {
+  let d = store.get("device");
+  if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12)); store.set("device", d); }
+  return d;
+}
+function useOwnKey() { return store.get("useOwnKey") === "1" && !!store.get("apiKey"); }
+function aiReady() { return useOwnKey() || !!PROXY; }
 function fill2D(rows, cols, v) { return Array.from({ length: rows }, () => Array(cols).fill(v)); }
 function cap(s) { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); }
 function colOffset(col, startColIndex) {
@@ -102,24 +114,86 @@ function initUI() {
   ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
   drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f && f.type.startsWith("image/")) attachImage(f); });
 
+  // help examples: fill the prompt, let the user select cells and press Go
+  document.querySelectorAll(".example").forEach((b) => b.addEventListener("click", () => { $("prompt").value = b.dataset.p; showTab("prompt"); $("prompt").focus(); }));
+  // feedback
+  $("fbSend").addEventListener("click", sendFeedback);
+  $("status").addEventListener("click", (e) => { if (e.target.id === "reportErr") { e.preventDefault(); openReport(); } });
+
   // settings
+  $("ver").textContent = VERSION;
+  $("useOwnKey").checked = store.get("useOwnKey") === "1";
   $("apiKey").value = store.get("apiKey") || "";
   const savedModel = store.get("model");
   if (savedModel) $("modelSelect").innerHTML = `<option value="${esc(savedModel)}">${esc(savedModel)}</option>`;
   $("loadModels").addEventListener("click", loadModels);
   $("saveSettings").addEventListener("click", saveSettings);
   refreshKeyNotice();
+  renderAiMode();
+  refreshQuota();
   renderHistory();
 }
 function showTab(name) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
-  ["prompt", "history", "settings"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== name));
+  ["prompt", "history", "help", "feedback", "settings"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== name));
 }
-function refreshKeyNotice() { $("noKey").classList.toggle("hidden", !!store.get("apiKey")); }
+function refreshKeyNotice() { $("noKey").classList.toggle("hidden", aiReady()); }
+function renderAiMode() {
+  const m = $("aiMode");
+  if (useOwnKey()) { m.className = "status"; m.innerHTML = "Using <b>your own Anthropic key</b>."; }
+  else if (PROXY) { m.className = "status ok"; m.innerHTML = "✓ Using <b>Vibe Sheet's free AI</b> — nothing to set up." + (state.quota ? `<br><span class="small">${state.quota.remaining} of ${state.quota.limit} prompts left today.</span>` : ""); }
+  else { m.className = "status err"; m.innerHTML = "The free AI isn't configured in this copy (config.js). Use your own key below."; $("ownKeyBox").open = true; }
+}
+async function refreshQuota() {
+  if (!PROXY || useOwnKey()) { $("quota").textContent = ""; return; }
+  try {
+    const r = await fetch(`${PROXY}/v1/status?device=${encodeURIComponent(deviceId())}`);
+    const j = await r.json(); if (r.ok) setQuota(j.remaining, j.limit);
+  } catch { /* offline: ignore */ }
+}
+function setQuota(remaining, limit) {
+  if (remaining == null || limit == null) return;
+  state.quota = { remaining, limit };
+  $("quota").textContent = `${remaining}/${limit} free prompts left today`;
+  renderAiMode();
+}
 function setStatus(html, kind = "") {
   const s = $("status");
   if (!html) { s.classList.add("hidden"); return; }
   s.className = "status " + kind; s.innerHTML = html;
+  if (kind === "err") {
+    state.lastError = s.textContent;
+    s.insertAdjacentHTML("beforeend", ` <br><a href="#" id="reportErr">Report this problem →</a>`);
+  }
+}
+function openReport() {
+  showTab("feedback");
+  document.querySelector('input[name="fbType"][value="bug"]').checked = true;
+  $("fbContext").checked = true;
+  if (!$("fbMessage").value.trim()) $("fbMessage").value = "It went wrong when I tried: " + (state.lastPrompt || "(describe what you did)") + "\n\n";
+  $("fbMessage").focus();
+}
+async function sendFeedback() {
+  const st = $("fbStatus");
+  const message = $("fbMessage").value.trim();
+  if (!message) { st.className = "status err"; st.textContent = "Please write a message first."; return; }
+  const type = (document.querySelector('input[name="fbType"]:checked') || {}).value || "other";
+  const context = $("fbContext").checked ? `Last request: ${state.lastPrompt || "-"}\nLast error: ${state.lastError || "-"}` : "";
+  const payload = { device: deviceId(), type, message, email: $("fbEmail").value.trim(), context, version: VERSION, host: state.inExcel ? "excel" : "browser" };
+  if (!PROXY) {
+    st.className = "status err";
+    st.innerHTML = CONFIG.feedbackEmail ? `Feedback service not set up. Please email <a href="mailto:${esc(CONFIG.feedbackEmail)}?subject=Vibe%20Sheet%20${esc(type)}&body=${encodeURIComponent(message + "\n\n" + context)}">${esc(CONFIG.feedbackEmail)}</a>.` : "Feedback service not set up in this copy.";
+    return;
+  }
+  $("fbSend").disabled = true; st.className = "status"; st.innerHTML = '<span class="spinner"></span>Sending…';
+  try {
+    const r = await fetch(`${PROXY}/v1/feedback`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `Couldn't send (${r.status}).`);
+    st.className = "status ok"; st.textContent = "Thanks! Your feedback was sent.";
+    $("fbMessage").value = "";
+  } catch (e) { st.className = "status err"; st.textContent = e.message; }
+  finally { $("fbSend").disabled = false; }
 }
 function setBusy(b, msg) {
   state.busy = b; $("send").disabled = b; $("accept").disabled = b;
@@ -159,8 +233,10 @@ function saveSettings() {
   store.set("apiKey", cleanKey($("apiKey").value));
   const typed = ($("modelManual").value || "").trim();
   if (typed) store.set("model", typed); else if ($("modelSelect").value) store.set("model", $("modelSelect").value);
+  store.set("useOwnKey", $("useOwnKey").checked ? "1" : "0");
   const st = $("settingsStatus"); st.className = "status ok"; st.textContent = "Saved.";
-  refreshKeyNotice();
+  if ($("useOwnKey").checked && !store.get("apiKey")) { st.className = "status err"; st.textContent = "Saved, but add a key to use your own."; }
+  refreshKeyNotice(); renderAiMode(); refreshQuota();
 }
 function cleanKey(k) { return String(k || "").replace(/[^\x21-\x7E]/g, ""); }   // strips spaces, line breaks, hidden characters
 function apiHeaders(key) {
@@ -315,7 +391,7 @@ PRINCIPLES
 5. Images: a table → transcribe into cells (numbers as numbers, keep headers). A maths/engineering/finance formula → create labelled input cells (label in one column, value next to it, units in the label; use values from the image or leave the value blank) plus a clearly labelled result cell with the Excel formula referencing those inputs. A screenshot of an Excel problem → diagnose and fix.
 6. Questions/explanations ("what does this do", "why #N/A") → answer in "message" (short, plain, use '-' bullets), and include fix operations if something should change. If nothing should change, operations = [].
 7. Data cleaning (trim, case, split, numbers stored as text, dates) → write cleaned values over the original cells unless the user asks for new columns. Dates: match the sheet's existing style; if unclear use dd/mm/yyyy. Write dates as =DATE(y,m,d) or "YYYY-MM-DD" text plus a numberFormat.
-8. Addresses are A1 style, optionally with sheet: 'Sheet Name'!A1:C5. No sheet name = the active sheet. Header names in pivots must match the header cells exactly.
+8. Never use whole-column or whole-row ranges (A:AO, 1:1000) for format, clear, sort or other changes; use the actual data area from the used range (e.g. A1:AO120). Addresses are A1 style, optionally with sheet: 'Sheet Name'!A1:C5. No sheet name = the active sheet. Header names in pivots must match the header cells exactly.
 9. Named cells. Existing names are listed and marked [named X] next to their cells: use the names in formulas instead of addresses (=Load*Span^2/8, not =B3*B2^2/8). "Call this Span" / "name these cells Rates" → a name op. Whenever you create labelled input cells (calcs, formulas from images), also add a name op for each input and for the result, and write the formula using those names. Names: letters, digits, underscores, no spaces, start with a letter, never look like a cell address (not A1, XY12) and never the single letters c, C, r, R — prefer short words (Span, Load_w, Moment).
 10. Reply in the user's language. "summary" = one short sentence.
 Today's date: ${new Date().toISOString().slice(0, 10)}.
@@ -354,6 +430,18 @@ function buildUserText(prompt, c, allowOutside) {
   ].filter(Boolean).join("\n\n");
 }
 async function callClaude(userText, image) {
+  if (!useOwnKey()) {
+    if (!PROXY) throw new Error("The AI isn't connected. Open Settings.");
+    let res;
+    try {
+      res = await fetch(`${PROXY}/v1/vibe`, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ device: deviceId(), text: userText, image: image ? { mediaType: image.mediaType, base64: image.base64 } : null, version: VERSION }) });
+    } catch { throw new Error("Couldn't reach the Vibe Sheet AI service. Check your internet connection."); }
+    const j = await res.json().catch(() => ({}));
+    if (j.remaining != null) setQuota(j.remaining, j.limit);
+    if (!res.ok) throw new Error(j.error || `AI service error ${res.status}.`);
+    return { ...j.result, usage: j.usage, model: j.model };
+  }
   const key = store.get("apiKey");
   if (!key) throw new Error("Add your API key in Settings first.");
   let model = store.get("model");
@@ -385,7 +473,8 @@ async function send() {
   const prompt = $("prompt").value.trim();
   if (!prompt && !state.image) { $("prompt").focus(); return; }
   if (!state.inExcel) { setStatus("Open this panel inside Excel to use it.", "err"); return; }
-  if (!store.get("apiKey")) { refreshKeyNotice(); showTab("settings"); return; }
+  if (!aiReady()) { refreshKeyNotice(); showTab("settings"); return; }
+  state.lastPrompt = prompt || "(image)";
   $("result").classList.add("hidden"); $("applied").classList.add("hidden");
   setBusy(true, "Reading your selection…");
   try {
@@ -562,7 +651,7 @@ async function accept() {
       entry.steps.push(...res.steps); entry.titles.push(it.title);
       if (res.noUndo) errors.push(`“${it.title}” applied, but it's too large to undo.`);
       if (it.target && MODIFYING.has(it.op.type)) entry.records.push({ sheet: it.target.sheet, r1: it.target.r1, c1: it.target.c1, r2: Math.min(it.target.r2, it.target.r1 + 5000), c2: it.target.c2, prompt: entry.prompt, time: entry.time, entry: entry.id });
-    } catch (e) { errors.push(`“${it.title}” failed: ${e.message}`); }
+    } catch (e) { errors.push(`“${it.title}” failed: ${/payload size/i.test(e.message) ? "that range is too big for Excel to change in one go. Select just your data (not whole columns) and try again." : e.message}`); }
   }
   setBusy(false);
   if (entry.titles.length) {
@@ -633,6 +722,19 @@ async function applyOp(op, defSheet) {
     const wb = ctx.workbook, steps = [];
     let noUndo = false;
     const R = (a) => getRange(ctx, a, defSheet);
+    // Whole columns/rows (A:AO, 1:500) hold millions of cells; trim them to the data area so Excel never has to move that much.
+    const RC = async (a) => {
+      const rng = R(a); rng.load("cellCount,rowCount,columnCount"); await ctx.sync();
+      if (rng.cellCount <= 200000) return rng;
+      const used = rng.worksheet.getUsedRangeOrNullObject(true); used.load("address"); await ctx.sync();
+      if (used.isNullObject) return rng.getCell(0, 0);
+      let anchor = null;
+      if (rng.rowCount > 100000 && rng.columnCount <= 1000) anchor = rng.getRow(0);
+      else if (rng.columnCount > 1000 && rng.rowCount <= 100000) anchor = rng.getColumn(0);
+      const box = anchor ? used.getBoundingRect(anchor) : used;
+      const out = rng.getIntersectionOrNullObject(box); out.load("address"); await ctx.sync();
+      return out.isNullObject ? rng.getCell(0, 0) : out;
+    };
     const snapPush = async (rng) => { const s = await snapshot(ctx, rng); if (s) steps.push({ kind: "restore", snap: s }); else noUndo = true; };
 
     switch (op.type) {
@@ -646,7 +748,7 @@ async function applyOp(op, defSheet) {
         break;
       }
       case "format": {
-        const rng = R(op.range); await snapPush(rng);
+        const rng = await RC(op.range); await snapPush(rng);
         rng.load("rowCount,columnCount"); await ctx.sync();
         const f = rng.format;
         if (op.bold != null) f.font.bold = !!op.bold;
@@ -677,12 +779,12 @@ async function applyOp(op, defSheet) {
         break;
       }
       case "clear": {
-        const rng = R(op.range); await snapPush(rng);
+        const rng = await RC(op.range); await snapPush(rng);
         rng.clear({ contents: "Contents", formats: "Formats", all: "All" }[op.what] || "Contents");
         break;
       }
       case "sort": {
-        const rng = R(op.range); await snapPush(rng);
+        const rng = await RC(op.range); await snapPush(rng);
         rng.load("columnIndex"); await ctx.sync();
         const keys = (op.keys && op.keys.length ? op.keys : [{ column: op.column ?? 0, ascending: op.ascending !== false }])
           .map((k) => ({ key: colOffset(k.column, rng.columnIndex), ascending: k.ascending !== false }));
@@ -690,14 +792,14 @@ async function applyOp(op, defSheet) {
         break;
       }
       case "removeDuplicates": {
-        const rng = R(op.range); await snapPush(rng);
+        const rng = await RC(op.range); await snapPush(rng);
         rng.load("columnIndex,columnCount"); await ctx.sync();
         const cols = op.columns && op.columns.length ? op.columns.map((c) => colOffset(c, rng.columnIndex)) : [...Array(rng.columnCount).keys()];
         rng.removeDuplicates(cols, !!op.hasHeaders);
         break;
       }
       case "findReplace": {
-        const rng = R(op.range); await snapPush(rng);
+        const rng = await RC(op.range); await snapPush(rng);
         rng.replaceAll(String(op.find ?? ""), String(op.replace ?? ""), { completeMatch: !!op.wholeCell, matchCase: !!op.matchCase });
         break;
       }
@@ -741,7 +843,7 @@ async function applyOp(op, defSheet) {
         break;
       }
       case "table": {
-        const rng = R(op.range); await snapPush(rng); rng.load("address"); rng.worksheet.load("name"); await ctx.sync();
+        const rng = await RC(op.range); await snapPush(rng); rng.load("address"); rng.worksheet.load("name"); await ctx.sync();
         const t = rng.worksheet.tables.add(rng, op.hasHeaders !== false);
         if (op.style) t.style = op.style;
         if (op.name) t.name = String(op.name).replace(/[^A-Za-z0-9_]/g, "_");

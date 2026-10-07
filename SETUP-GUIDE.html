@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe Sheet Setup</title>
+<style>
+  :root { --accent:#107c5a; --bg:#f6f8f7; --card:#fff; --text:#1d2420; --muted:#5f6b65; --border:#dfe5e2; --warn:#fff6e0; --warnText:#7a5200; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 "Segoe UI", -apple-system, system-ui, sans-serif; }
+  .wrap { max-width:780px; margin:0 auto; padding:32px 16px 64px; }
+  header { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  header img { width:40px; height:40px; }
+  h1 { font-size:28px; margin:0; }
+  .tag { color:var(--muted); margin:0 0 20px; }
+  .part { font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin:28px 0 8px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px 22px; margin-bottom:16px; }
+  .step { display:flex; gap:14px; align-items:flex-start; }
+  .num { flex:none; width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  h2 { font-size:19px; margin:2px 0 10px; }
+  ol, ul { margin:0; padding-left:20px; }
+  li { margin:6px 0; }
+  code { background:#eef3f0; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-family:Consolas, monospace; font-size:14px; word-break:break-all; }
+  .note { background:var(--warn); color:var(--warnText); border-radius:8px; padding:10px 14px; margin-top:12px; font-size:15px; }
+  .ok { background:#e6f4ea; color:#0b5e44; border-radius:8px; padding:10px 14px; margin-top:12px; font-size:15px; }
+  .path { color:var(--accent); font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:15px; margin-top:6px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--bg); }
+  a { color:var(--accent); }
+  .muted { color:var(--muted); font-size:14px; }
+  .flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:600; margin:6px 0 2px; }
+  .flow span { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:6px 10px; }
+  .flow .lock { border-color:var(--accent); color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><img src="assets/icon-80.png" alt=""><h1>Vibe Sheet setup</h1></header>
+  <p class="tag">Why remember formulas when you can talk to your cells? · Version 1.1</p>
+
+  <div class="card">
+    <h2>How your key stays safe</h2>
+    <div class="flow"><span>Excel add-in</span>→<span class="lock">🔒 Your Cloudflare Worker (holds the key)</span>→<span>Anthropic AI</span></div>
+    <ul>
+      <li>The key lives only in Cloudflare as a <b>secret</b>. It is never in GitHub, never in the add-in, never sent to users.</li>
+      <li>The Worker only runs the Vibe Sheet prompt, so the key can't be used as a general chatbot.</li>
+      <li>Each person gets a daily limit (default 30 prompts), each network 300, and only your add-in's site is accepted.</li>
+      <li>Final safety net: a <b>monthly spending limit</b> in Anthropic (step 1).</li>
+    </ul>
+  </div>
+
+  <div class="part">Part A · One-time server setup (about 15 minutes)</div>
+
+  <div class="card"><div class="step"><div class="num">1</div><div>
+    <h2>Anthropic: key and spending limit</h2>
+    <ol>
+      <li>At <a href="https://console.anthropic.com">console.anthropic.com</a> → <b>API Keys → Create Key</b>. Name it <code>vibesheet-server</code> and copy it.</li>
+      <li>Go to <b>Settings → Limits</b> and set a <b>monthly spend limit</b> you're comfortable with (e.g. US$20).</li>
+    </ol>
+    <div class="note">If you pasted a key into the old add-in Settings, delete that key in the console and use this new one only in Cloudflare.</div>
+  </div></div></div>
+
+  <div class="card"><div class="step"><div class="num">2</div><div>
+    <h2>Cloudflare: create the storage (KV)</h2>
+    <ol>
+      <li>Sign up free at <a href="https://dash.cloudflare.com/sign-up">dash.cloudflare.com</a>.</li>
+      <li>Left menu: <span class="path">Storage &amp; Databases → Workers KV</span> → <b>Create</b> (or Create instance).</li>
+      <li>Name it <code>vibesheet</code> → <b>Create</b>.</li>
+    </ol>
+  </div></div></div>
+
+  <div class="card"><div class="step"><div class="num">3</div><div>
+    <h2>Cloudflare: create the Worker</h2>
+    <ol>
+      <li>Left menu: <span class="path">Compute → Workers &amp; Pages</span> → <b>Create</b> → <b>Start with Hello World</b>.</li>
+      <li>Name it <code>vibesheet-api</code> → <b>Deploy</b>.</li>
+      <li>Click <b>Edit code</b>. Select all the code and delete it.</li>
+      <li>Open <code>server/worker.js</code> from the zip in Notepad, copy everything, paste it in → <b>Deploy</b>.</li>
+    </ol>
+  </div></div></div>
+
+  <div class="card"><div class="step"><div class="num">4</div><div>
+    <h2>Cloudflare: add the secrets and storage</h2>
+    <p>In your Worker: <span class="path">Settings → Variables and Secrets → Add</span></p>
+    <table>
+      <tr><th>Type</th><th>Name</th><th>Value</th></tr>
+      <tr><td>Secret</td><td><code>ANTHROPIC_API_KEY</code></td><td>the key from step 1</td></tr>
+      <tr><td>Secret</td><td><code>ADMIN_TOKEN</code></td><td>a long password you make up (for reading feedback)</td></tr>
+      <tr><td>Text <span class="muted">(optional)</span></td><td><code>DAILY_LIMIT</code></td><td>prompts per person per day, e.g. <code>30</code></td></tr>
+    </table>
+    <p style="margin-top:12px">Then <span class="path">Settings → Bindings → Add → KV namespace</span>: variable name <code>VS_KV</code>, namespace <code>vibesheet</code> → <b>Deploy</b>.</p>
+    <p>Copy your Worker address from the top of the page, like <code>https://vibesheet-api.yourname.workers.dev</code>.</p>
+    <div class="ok">Test: open <code>https://vibesheet-api.yourname.workers.dev/v1/status</code> in your browser. Seeing <i>"This service only works inside the Vibe Sheet add-in."</i> means it's live and protected.</div>
+  </div></div></div>
+
+  <div class="part">Part B · Connect the add-in</div>
+
+  <div class="card"><div class="step"><div class="num">5</div><div>
+    <h2>Put the Worker address in config.js</h2>
+    <ol>
+      <li>Open <code>config.js</code> in Notepad.</li>
+      <li>Replace <code>https://vibesheet-api.YOUR-SUBDOMAIN.workers.dev</code> with your Worker address (keep the quotes) → Save.</li>
+    </ol>
+  </div></div></div>
+
+  <div class="card"><div class="step"><div class="num">6</div><div>
+    <h2>Upload to GitHub</h2>
+    <ol>
+      <li><a href="https://github.com/quickshortscompany-hub/vibesheet">Your repo</a> → <b>Add file → Upload files</b>.</li>
+      <li>Drag in everything from the vibesheet folder <b>except the <code>server</code> folder</b> (it isn't needed on GitHub) → <b>Commit changes</b>.</li>
+      <li>Wait 2 minutes. In Excel, close Vibe Sheet, press <b>Ctrl + Shift + R</b>, reopen it.</li>
+    </ol>
+    <div class="ok">⚙ Settings should say <b>"Using Vibe Sheet's free AI"</b> and the bottom should say <b>v1.1.0</b>. No key needed for anyone.</div>
+  </div></div></div>
+
+  <div class="card"><div class="step"><div class="num">7</div><div>
+    <h2>Share it</h2>
+    <p>Give people the <b>manifest.xml</b> file and these steps:</p>
+    <ul>
+      <li><b>Excel on the web:</b> <span class="path">Home → Add-ins → More Add-ins → My Add-ins → Upload My Add-in</span> → manifest.xml</li>
+      <li><b>Excel on Windows:</b> the shared-folder steps (File → Options → Trust Center → Trusted Add-in Catalogs).</li>
+    </ul>
+    <p class="muted">Later, listing on Microsoft AppSource lets anyone install it with one click.</p>
+  </div></div></div>
+
+  <div class="part">Part C · Read feedback</div>
+
+  <div class="card"><div class="step"><div class="num">8</div><div>
+    <h2>Your admin page</h2>
+    <p>Open <a href="https://quickshortscompany-hub.github.io/vibesheet/admin.html">quickshortscompany-hub.github.io/vibesheet/admin.html</a>, enter your Worker address and <code>ADMIN_TOKEN</code>, press <b>Load</b>.</p>
+    <p>You'll see today's users and prompts, and every suggestion, bug report and question (with the error that caused it). Export to CSV any time.</p>
+  </div></div></div>
+
+  <div class="card">
+    <h2>Free limits to know</h2>
+    <table>
+      <tr><th>Service</th><th>Free amount</th><th>When you outgrow it</th></tr>
+      <tr><td>Cloudflare Workers</td><td>100,000 requests/day</td><td>Plenty for a pilot</td></tr>
+      <tr><td>Cloudflare KV</td><td>1,000 saves/day ≈ 500 prompts/day across all users</td><td>Workers Paid plan (about US$5/month)</td></tr>
+      <tr><td>Anthropic</td><td>Pay per prompt</td><td>Your monthly spend limit caps it</td></tr>
+    </table>
+    <p class="muted">Check current pricing on Cloudflare's and Anthropic's sites before scaling up.</p>
+  </div>
+</div>
+</body>
+</html>

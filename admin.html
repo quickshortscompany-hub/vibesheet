@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe Sheet Admin</title>
+<style>
+  :root { --accent:#107c5a; --bg:#f6f8f7; --card:#fff; --text:#1d2420; --muted:#5f6b65; --border:#dfe5e2; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 "Segoe UI", -apple-system, system-ui, sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin:16px 0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:end; }
+  label { display:flex; flex-direction:column; gap:4px; font-weight:600; font-size:13px; flex:1; min-width:220px; }
+  input, select { padding:8px 10px; border:1px solid var(--border); border-radius:6px; font:inherit; font-weight:400; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 14px; font:inherit; font-weight:600; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--text); border:1px solid var(--border); }
+  .stats { display:flex; gap:12px; flex-wrap:wrap; }
+  .stat { background:var(--bg); border-radius:8px; padding:10px 14px; min-width:140px; }
+  .stat b { display:block; font-size:22px; }
+  .tablewrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--bg); white-space:nowrap; }
+  td.msg { white-space:pre-wrap; min-width:260px; }
+  td.ctx { white-space:pre-wrap; color:var(--muted); font-size:12.5px; max-width:300px; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; background:var(--bg); }
+  .tag.bug { background:#fdecec; color:#a4262c; } .tag.suggestion { background:#e8f0fb; color:#1d4f91; }
+  .tag.praise { background:#e6f4ea; color:#0b5e44; } .tag.question { background:#fff6e0; color:#7a5200; }
+  .err { color:#a4262c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vibe Sheet admin</h1>
+  <p class="muted">Read feedback and usage. Your admin token stays in this browser only.</p>
+
+  <div class="card">
+    <div class="row">
+      <label>Worker address <input id="api" placeholder="https://vibesheet-api.xxx.workers.dev"></label>
+      <label>Admin token <input id="tok" type="password" placeholder="the ADMIN_TOKEN you set in Cloudflare"></label>
+      <button id="load">Load</button>
+    </div>
+    <p id="msg" class="muted"></p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px">Today</h3>
+    <div class="stats">
+      <div class="stat"><span class="muted">People using it</span><b id="sPeople">–</b></div>
+      <div class="stat"><span class="muted">Prompts</span><b id="sPrompts">–</b></div>
+      <div class="stat"><span class="muted">Feedback items</span><b id="sFb">–</b></div>
+      <div class="stat"><span class="muted">AI model</span><b id="sModel" style="font-size:14px">–</b></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 style="margin:0">Feedback <span class="muted">(newest first)</span></h3>
+      <div class="row" style="align-items:center">
+        <select id="filter"><option value="">All types</option><option>bug</option><option>suggestion</option><option>question</option><option>praise</option><option>other</option></select>
+        <button class="ghost" id="csv">Export CSV</button>
+      </div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Context</th><th>Email</th><th>Version</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="6" class="muted">Press Load.</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const ls = { get(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+let items = [];
+$("api").value = ls.get("vs.admin.api"); $("tok").value = ls.get("vs.admin.tok");
+async function get(path) {
+  const api = $("api").value.trim().replace(/\/+$/, "");
+  const r = await fetch(api + path, { headers: { "x-admin-token": $("tok").value.trim() } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Error " + r.status);
+  return j;
+}
+function render() {
+  const f = $("filter").value;
+  const list = items.filter((i) => !f || i.type === f);
+  $("rows").innerHTML = list.length ? list.map((i) => `<tr><td>${esc(new Date(i.time).toLocaleString())}</td><td><span class="tag ${esc(i.type)}">${esc(i.type)}</span></td><td class="msg">${esc(i.message)}</td><td class="ctx">${esc(i.context)}</td><td>${i.email ? `<a href="mailto:${esc(i.email)}">${esc(i.email)}</a>` : ""}</td><td>${esc(i.version)}</td></tr>`).join("") : `<tr><td colspan="6" class="muted">No feedback yet.</td></tr>`;
+}
+$("load").onclick = async () => {
+  ls.set("vs.admin.api", $("api").value.trim()); ls.set("vs.admin.tok", $("tok").value.trim());
+  $("msg").className = "muted"; $("msg").textContent = "Loading…";
+  try {
+    const [fb, st] = await Promise.all([get("/v1/admin/feedback"), get("/v1/admin/stats")]);
+    items = fb.items || [];
+    const day = new Date().toISOString().slice(0, 10);
+    $("sPeople").textContent = st.people; $("sPrompts").textContent = st.prompts; $("sModel").textContent = st.model;
+    $("sFb").textContent = items.filter((i) => (i.time || "").startsWith(day)).length;
+    $("msg").textContent = `Loaded ${items.length} feedback items.`;
+    render();
+  } catch (e) { $("msg").className = "err"; $("msg").textContent = e.message; }
+};
+$("filter").onchange = render;
+$("csv").onclick = () => {
+  const head = ["time", "type", "message", "context", "email", "version", "host"];
+  const csv = [head.join(",")].concat(items.map((i) => head.map((h) => `"${String(i[h] ?? "").replace(/"/g, '""')}"`).join(","))).join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "vibesheet-feedback.csv"; a.click();
+};
+</script>
+</body>
+</html>

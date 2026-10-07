@@ -1,4 +1,4 @@
-# Vibe Sheet — MVP v1.0 (Excel add-in)
+# Vibe Sheet v1.1 (Excel add-in)
 
 Select cells → type what you want → preview → Accept → Undo if needed.
 The AI can only change your selection (plus empty cells next to it) unless you tick **Allow edits outside selection**.
@@ -23,29 +23,15 @@ Every change shows a before/after preview. You can untick individual changes. Pr
 
 ---
 
-## Setup (already set for github.com/quickshortscompany-hub)
+## Setup
+Open **SETUP-GUIDE.html** (double-click it). It covers the secure server (Cloudflare Worker that holds your Anthropic key), connecting the add-in, sharing it, and reading feedback on **admin.html**.
 
-### 1. Upload to GitHub (replace everything)
-1. Open your repo **quickshortscompany-hub/vibesheet**.
-2. **Add file → Upload files** → drag in EVERYTHING from this folder: `taskpane.html`, `taskpane.js`, `taskpane.css`, `manifest.xml`, `README.md` and the `assets` folder → **Commit changes**. Same-name files are replaced.
-3. Wait 2 minutes. Open https://quickshortscompany-hub.github.io/vibesheet/taskpane.html — the bottom of **Settings** must say **v1.0.2**.
-
-### 2. Excel desktop (Windows)
-Excel desktop still needs internet: the panel loads from GitHub and talks to the AI.
-1. Make a folder, e.g. `C:\VibeSheet`, and copy `manifest.xml` into it.
-2. Right-click the folder → **Properties → Sharing → Share…** → add yourself → **Share**. Copy the **network path** shown (like `\\YOUR-PC\VibeSheet`).
-3. Excel → **File → Options → Trust Center → Trust Center Settings → Trusted Add-in Catalogs**.
-4. Paste the network path in **Catalog Url** → **Add catalog** → tick **Show in Menu** → **OK** → **OK**.
-5. Close and reopen Excel.
-6. **Home → Add-ins → More Add-ins** (or **Insert → My Add-ins**) → **SHARED FOLDER** tab → **Vibe Sheet** → **Add**.
-7. Click **Vibe Sheet** on the Home tab.
-
-### 3. Excel on the web (alternative)
-**Home → Add-ins → More Add-ins → My Add-ins → Upload My Add-in** → choose `manifest.xml`. If an older Vibe Sheet is there, remove it first (… → Remove).
-
-### 4. First run
-**Settings** → paste your Anthropic key → **Load** → pick a Sonnet model → **Save**.
-If Load shows an error, the red box now shows Anthropic's exact message. You can also type a model ID in the box under the dropdown and press Save.
+## Files
+- `taskpane.html / .css / .js` the add-in panel (Prompt, History, Help, Feedback, Settings)
+- `config.js` the only file you edit: your Worker address
+- `manifest.xml` tells Excel where the add-in lives
+- `admin.html` read feedback and usage (needs your ADMIN_TOKEN)
+- `server/worker.js` paste into Cloudflare; do NOT upload to GitHub (it holds no secrets, but isn't needed there)
 
 ## Tips
 - **Ctrl/⌘ + Enter** sends.
@@ -53,13 +39,8 @@ If Load shows an error, the red box now shows Anthropic's exact message. You can
 - Changes outside your selection that would overwrite data are **unticked by default** (yellow badge).
 - Undo works in the panel (newest first). Excel's own Ctrl+Z may not undo add-in changes.
 
-## Limits of this MVP
-- Your API key is stored in this browser only. Fine for you and testers using their own keys. **Before a public launch, move the key to a small server** (v2) so users don't need their own key and you can charge for it.
+## Limits
+- The AI key lives only in Cloudflare. Each person gets a daily prompt limit; set a monthly spend limit in Anthropic as the final safety net.
 - Very large ranges (25,000+ filled cells) apply but can't be undone.
 - Charts, pivots and dropdowns undo by deleting them. Previous dropdown rules on those cells aren't restored.
 - Needs Excel 2021 / Microsoft 365 / Excel on the web (ExcelApi 1.9).
-
-## Files
-- `manifest.xml`: tells Excel where the add-in lives and adds the ribbon button
-- `taskpane.html / .css / .js`: the panel, AI call, preview, apply and undo engine
-- `assets/`: icons

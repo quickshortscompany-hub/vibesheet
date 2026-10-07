@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vibe Sheet</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-  <link rel="stylesheet" href="taskpane.css?v=3" />
+  <link rel="stylesheet" href="taskpane.css?v=5" />
 </head>
 <body>
   <header class="top">
@@ -13,14 +13,16 @@
     <nav class="tabs">
       <button class="tab active" data-tab="prompt">Prompt</button>
       <button class="tab" data-tab="history">History</button>
-      <button class="tab" data-tab="settings">Settings</button>
+      <button class="tab" data-tab="help">Help</button>
+      <button class="tab" data-tab="feedback">Feedback</button>
+      <button class="tab" data-tab="settings" title="Settings">⚙</button>
     </nav>
   </header>
 
   <!-- PROMPT TAB -->
   <main id="tab-prompt" class="panel">
     <div id="noKey" class="notice warn hidden">
-      Add your Anthropic API key in <a href="#" data-goto="settings">Settings</a> to start.
+      The AI isn't connected yet. See <a href="#" data-goto="settings">Settings</a>.
     </div>
 
     <div class="selbar">
@@ -59,7 +61,7 @@
         <button id="send" class="primary">Go ⏎</button>
       </div>
     </div>
-    <div class="hint muted">Ctrl/⌘ + Enter to send · paste or drop images here</div>
+    <div class="hint muted"><span>Ctrl/⌘ + Enter to send · paste or drop images</span><span id="quota"></span></div>
 
     <div id="status" class="status hidden"></div>
 
@@ -86,27 +88,106 @@
     <ul id="historyList" class="history"></ul>
   </main>
 
-  <!-- SETTINGS TAB -->
-  <main id="tab-settings" class="panel hidden">
-    <label class="field">
-      <span>Anthropic API key</span>
-      <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" />
-    </label>
-    <p class="muted small">Stored only in this browser/Excel on this computer. Get one at console.anthropic.com.</p>
-    <div class="field">
-      <span>Model</span>
-      <div class="row">
-        <select id="modelSelect"><option value="">— load models —</option></select>
-        <button id="loadModels" class="ghost">Load</button>
-      </div>
-      <input id="modelManual" type="text" placeholder="…or type a model ID (optional)" style="margin-top:6px" />
+  <!-- HELP TAB -->
+  <main id="tab-help" class="panel hidden help">
+    <h3>Why remember formulas when you can talk to your cells?</h3>
+    <ol class="steps">
+      <li><b>Select</b> the cells you want to change.</li>
+      <li><b>Say it</b> in the box, in any words — or paste a photo.</li>
+      <li><b>Preview</b> every change (before → after). Untick anything you don't want.</li>
+      <li><b>Accept</b>. Changed your mind? Press <b>Undo</b>.</li>
+    </ol>
+
+    <h4>Try these <span class="muted small">(tap to use)</span></h4>
+    <div class="examples">
+      <button class="example" data-p="Add a total row underneath using SUM formulas."><b>Totals</b> “add a total row”</button>
+      <button class="example" data-p="Look up the price for each product code from Sheet2."><b>Lookups</b> “price for each code from Sheet2”</button>
+      <button class="example" data-p="Split the full names into first name and last name columns."><b>Split</b> “split full name into first and last”</button>
+      <button class="example" data-p="Make negative numbers red and format as currency with 2 decimals."><b>Format</b> “negatives red, currency”</button>
+      <button class="example" data-p="Add a dropdown with Yes, No, Maybe to these cells."><b>Dropdown</b> “Yes / No / Maybe list”</button>
+      <button class="example" data-p="Highlight duplicate values in light red."><b>Highlight</b> “show duplicates in red”</button>
+      <button class="example" data-p="Sort by the date column, newest first."><b>Sort</b> “by date, newest first”</button>
+      <button class="example" data-p="Freeze the top row so headers stay visible."><b>Freeze</b> “freeze the top row”</button>
+      <button class="example" data-p="Make a line chart of this data with a title."><b>Chart</b> “line chart with a title”</button>
+      <button class="example" data-p="Create a pivot table on a new sheet: sum of the numbers by category."><b>Pivot</b> “sum by category, new sheet”</button>
+      <button class="example" data-p="Why does this cell show an error? Fix it."><b>Errors</b> “why #N/A? fix it”</button>
+      <button class="example" data-p="Call this cell Span."><b>Names</b> “call this cell Span”</button>
     </div>
-    <button id="saveSettings" class="primary">Save</button>
-    <div id="settingsStatus" class="status hidden"></div>
-    <hr />
-    <p class="muted small">Vibe Sheet MVP v1.0.2 · The AI only proposes changes. Nothing is written until you press Accept.</p>
+
+    <h4>Features</h4>
+    <table class="feat">
+      <tr><td>🎯 Selection lock</td><td>Only your selected cells change. Edits that would overwrite data elsewhere come unticked.</td></tr>
+      <tr><td>👀 Preview</td><td>See every change before it happens; accept all or some.</td></tr>
+      <tr><td>↩︎ Undo</td><td>Undo any AI change from the panel or the History tab.</td></tr>
+      <tr><td>🧮 Real formulas</td><td>Answers are live Excel formulas you can check, not pasted numbers.</td></tr>
+      <tr><td>🏷 Named cells</td><td>“Call this Span” → formulas read <code>=Load_w*Span^2/8</code>.</td></tr>
+      <tr><td>📷 Image → cells</td><td>Paste a photo of a table, a textbook formula or an error message.</td></tr>
+      <tr><td>✨ Cell memory</td><td>Click a cell to see which prompt made it.</td></tr>
+      <tr><td>🛠 No ribbon hunting</td><td>Colours, borders, dropdowns, freeze, sort, charts, pivots — just ask.</td></tr>
+    </table>
+
+    <h4>Tips</h4>
+    <ul class="tips">
+      <li>Select <b>just your data</b>, not whole columns.</li>
+      <li>One cell selected + “make a table of…” fills empty cells next to it.</li>
+      <li>Be specific about where: “in column D”, “on a new sheet”.</li>
+      <li>Follow-ups work: “make it blue instead”.</li>
+      <li>Only the selected cells and a short summary of the sheet are sent to the AI.</li>
+    </ul>
+    <p class="muted small">Stuck or have an idea? <a href="#" data-goto="feedback">Send feedback</a>.</p>
   </main>
 
-  <script src="taskpane.js?v=3"></script>
+  <!-- FEEDBACK TAB -->
+  <main id="tab-feedback" class="panel hidden">
+    <p class="muted">Ideas, bugs, questions — we read everything.</p>
+    <div class="fb-types">
+      <label><input type="radio" name="fbType" value="suggestion" checked /> 💡 Suggestion</label>
+      <label><input type="radio" name="fbType" value="bug" /> 🐞 Problem / error</label>
+      <label><input type="radio" name="fbType" value="question" /> ❓ Question</label>
+      <label><input type="radio" name="fbType" value="praise" /> 👍 I like it</label>
+    </div>
+    <label class="field">
+      <span>Message</span>
+      <textarea id="fbMessage" rows="6" placeholder="What happened, or what would you like Vibe Sheet to do?"></textarea>
+    </label>
+    <label class="check fb-check"><input type="checkbox" id="fbContext" checked /> Include my last request and error (helps us fix it)</label>
+    <label class="field">
+      <span>Email <span class="muted small">(optional, if you want a reply)</span></span>
+      <input id="fbEmail" type="email" placeholder="you@example.com" />
+    </label>
+    <button id="fbSend" class="primary">Send feedback</button>
+    <div id="fbStatus" class="status hidden"></div>
+  </main>
+
+  <!-- SETTINGS TAB -->
+  <main id="tab-settings" class="panel hidden">
+    <h4 class="first">AI access</h4>
+    <div id="aiMode" class="status"></div>
+
+    <details id="ownKeyBox">
+      <summary>Advanced: use my own Anthropic key</summary>
+      <label class="check fb-check"><input type="checkbox" id="useOwnKey" /> Use my own key instead of Vibe Sheet's AI</label>
+      <label class="field">
+        <span>Anthropic API key</span>
+        <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" />
+      </label>
+      <p class="muted small">Stored only on this computer. Get one at console.anthropic.com.</p>
+      <div class="field">
+        <span>Model</span>
+        <div class="row">
+          <select id="modelSelect"><option value="">— load models —</option></select>
+          <button id="loadModels" class="ghost">Load</button>
+        </div>
+        <input id="modelManual" type="text" placeholder="…or type a model ID (optional)" style="margin-top:6px" />
+      </div>
+      <button id="saveSettings" class="primary">Save</button>
+      <div id="settingsStatus" class="status hidden"></div>
+    </details>
+    <hr />
+    <p class="muted small">Vibe Sheet v<span id="ver"></span> · The AI only proposes changes. Nothing is written until you press Accept.</p>
+  </main>
+
+  <script src="config.js?v=5"></script>
+  <script src="taskpane.js?v=5"></script>
 </body>
 </html>
