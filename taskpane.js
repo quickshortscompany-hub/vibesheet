@@ -5,8 +5,10 @@
 "use strict";
 
 /* ---------------- constants ---------------- */
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
+const DEFAULT_API = "https://vibesheet-api.quickshortscompany.workers.dev";   // used if config.js is missing, old or cached
 const CONFIG = window.VIBESHEET_CONFIG || {};
+if (!CONFIG.apiUrl || /YOUR-SUBDOMAIN/.test(CONFIG.apiUrl)) CONFIG.apiUrl = DEFAULT_API;
 const PROXY = /YOUR-SUBDOMAIN|^\s*$/.test(CONFIG.apiUrl || "") ? "" : String(CONFIG.apiUrl).trim().replace(/\/+$/, "");
 const API_URL = "https://api.anthropic.com/v1/messages";
 const MODELS_URL = "https://api.anthropic.com/v1/models?limit=100";
