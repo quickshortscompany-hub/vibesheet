@@ -5,7 +5,7 @@
 "use strict";
 
 /* ---------------- constants ---------------- */
-const VERSION = "1.1.1";
+const VERSION = "1.1.2";
 const DEFAULT_API = "https://vibesheet-api.quickshortscompany.workers.dev";   // used if config.js is missing, old or cached
 const CONFIG = window.VIBESHEET_CONFIG || {};
 if (!CONFIG.apiUrl || /YOUR-SUBDOMAIN/.test(CONFIG.apiUrl)) CONFIG.apiUrl = DEFAULT_API;
@@ -383,7 +383,7 @@ const TOOL = {
   },
 };
 function systemPrompt() {
-  return `You are Vibe Sheet, an AI working inside Microsoft Excel. The user selects cells and describes what they want in plain language (any wording, typos are fine). You reply ONLY by calling apply_sheet_changes with precise operations. The user previews every operation and accepts or rejects it.
+  return `You are Vibe Sheet, an AI working inside Microsoft Excel. The user selects cells and describes what they want in plain language (any wording, typos are fine). You reply ONLY by calling the apply_sheet_changes tool with precise operations — always call the tool, never reply with plain text. The user previews every operation and accepts or rejects it.
 
 PRINCIPLES
 1. Precision and control. Change only what was asked, only inside the user's selection. You may also fill EMPTY cells next to the selection when the result needs more room (e.g. one cell selected and they ask for a table, or a helper column). Never rebuild or rewrite the sheet. In write operations include only cells that actually change; use several small write ops for separate blocks; use null to skip a cell inside a block.
@@ -395,7 +395,8 @@ PRINCIPLES
 7. Data cleaning (trim, case, split, numbers stored as text, dates) → write cleaned values over the original cells unless the user asks for new columns. Dates: match the sheet's existing style; if unclear use dd/mm/yyyy. Write dates as =DATE(y,m,d) or "YYYY-MM-DD" text plus a numberFormat.
 8. Never use whole-column or whole-row ranges (A:AO, 1:1000) for format, clear, sort or other changes; use the actual data area from the used range (e.g. A1:AO120). Addresses are A1 style, optionally with sheet: 'Sheet Name'!A1:C5. No sheet name = the active sheet. Header names in pivots must match the header cells exactly.
 9. Named cells. Existing names are listed and marked [named X] next to their cells: use the names in formulas instead of addresses (=Load*Span^2/8, not =B3*B2^2/8). "Call this Span" / "name these cells Rates" → a name op. Whenever you create labelled input cells (calcs, formulas from images), also add a name op for each input and for the result, and write the formula using those names. Names: letters, digits, underscores, no spaces, start with a letter, never look like a cell address (not A1, XY12) and never the single letters c, C, r, R — prefer short words (Span, Load_w, Moment).
-10. Reply in the user's language. "summary" = one short sentence.
+10. Calculations and models: lay them out as label | value | unit rows with a bold header. Style inputs and outputs differently unless the user says otherwise: inputs blue text (#1F4E9E) on light yellow fill (#FFF2CC); outputs bold on light green fill (#E2EFDA). Name inputs and outputs (rule 9) and use the names in formulas; use PI() for π.
+11. Reply in the user's language. "summary" = one short sentence.
 Today's date: ${new Date().toISOString().slice(0, 10)}.
 
 OPERATIONS (field "type" + fields):
@@ -416,6 +417,17 @@ OPERATIONS (field "type" + fields):
 - delete {range, shift:up|left}
 - newSheet {name}
 - name {range:"B2", name:"Span"}   creates (or replaces) an Excel named range; it can also name a block, e.g. {range:"B2:B20", name:"Rates"}`;
+}
+/* Newer models don't allow a forced tool, so we ask nicely ("auto") and also accept plain JSON or plain text. */
+function readAiResult(j) {
+  const blocks = j.content || [];
+  const tu = blocks.find((b) => b.type === "tool_use");
+  if (tu && tu.input) return tu.input;
+  const text = blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+  const m = text.match(/\{[\s\S]*\}/);
+  if (m) { try { const o = JSON.parse(m[0]); if (o && (o.operations || o.summary)) return { summary: o.summary || "", message: o.message || "", operations: Array.isArray(o.operations) ? o.operations : [] }; } catch { /* not JSON */ } }
+  if (text) return { summary: "Answer", message: text, operations: [] };
+  return null;
 }
 function buildUserText(prompt, c, allowOutside) {
   const recent = state.chat.slice(-4).map((x, i) => `${i + 1}. "${shortVal(x.prompt, 120)}" → ${shortVal(x.summary, 120)}`).join("\n");
@@ -453,7 +465,7 @@ async function callClaude(userText, image) {
   content.push({ type: "text", text: userText });
   const res = await fetch(API_URL, {
     method: "POST", headers: apiHeaders(key),
-    body: JSON.stringify({ model, max_tokens: 8192, system: systemPrompt(), tools: [TOOL], tool_choice: { type: "tool", name: TOOL.name }, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model, max_tokens: 8192, system: systemPrompt(), tools: [TOOL], tool_choice: { type: "auto" }, messages: [{ role: "user", content }] }),
   });
   if (!res.ok) {
     let detail = ""; try { detail = (await res.json()).error.message; } catch { /* ignore */ }
@@ -464,9 +476,9 @@ async function callClaude(userText, image) {
   }
   const j = await res.json();
   if (j.stop_reason === "max_tokens") throw new Error("That response was too big. Select a smaller range or split the request.");
-  const tu = (j.content || []).find((b) => b.type === "tool_use");
-  if (!tu) throw new Error("The AI didn't return any changes. Try rephrasing.");
-  return { ...tu.input, usage: j.usage, model };
+  const out = readAiResult(j);
+  if (!out) throw new Error("The AI didn't return any changes. Try rephrasing.");
+  return { ...out, usage: j.usage, model };
 }
 
 /* ---------------- send → preview ---------------- */
